@@ -135,6 +135,13 @@ if [[ ! -d "$SPIDER_DIR" ]]; then
   msg_ok "Source DXSpider installé dans $SPIDER_DIR"
 fi
 
+# DXSpider attend en dur `/spider` comme racine d'install. On crée un
+# symlink vers /home/sysop/spider — c'est la convention historique.
+if [[ ! -e /spider ]]; then
+  ln -s "$SPIDER_DIR" /spider
+  msg_ok "Symlink /spider → $SPIDER_DIR"
+fi
+
 # ── 5. premier lancement (création schéma SQLite, etc.) ──────────────
 if [[ ! -f "$SPIDER_DIR/local/DXVars.pm" ]]; then
   msg_info "Bootstrap du schéma DXSpider (premier run)"
@@ -210,10 +217,10 @@ Wants=network-online.target
 Type=simple
 User=sysop
 Group=sysop
-WorkingDirectory=/home/sysop/spider/perl
+WorkingDirectory=/spider/perl
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
-ExecStart=/usr/bin/perl /home/sysop/spider/perl/cluster.pl
+ExecStart=/usr/bin/perl /spider/perl/cluster.pl
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
