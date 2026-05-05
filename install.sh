@@ -45,7 +45,9 @@ apt-get -qq install -y --no-install-recommends \
   libdbi-perl libdbd-sqlite3-perl libdata-dumper-simple-perl \
   libio-socket-ssl-perl libnet-cidr-lite-perl libnet-cidr-perl \
   libtime-hires-perl libio-socket-inet6-perl libxml-simple-perl \
-  libfile-find-rule-perl >/dev/null
+  libfile-find-rule-perl libmojolicious-perl libcrypt-passwdmd5-perl \
+  libio-string-perl libjson-xs-perl libtest-pod-perl libterm-readkey-perl \
+  libcurses-perl libev-perl >/dev/null
 msg_ok "Dépendances installées"
 
 msg_info "Activation SSH (root login par mot de passe)"
