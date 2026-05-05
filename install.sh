@@ -53,9 +53,10 @@ apt-get -qq install -y --no-install-recommends \
 msg_ok "Dépendances installées"
 
 # Quelques modules CPAN n'ont pas de paquet Debian — on les installe via cpanm
-# si manquants après apt. La liste est minimale.
+# si manquants après apt. Digest::SHA1 a été retiré de Debian 13 (libdigest-sha1-perl
+# n'existe plus) mais reste requis par DXSpider.
 msg_info "Vérification des modules Perl complémentaires (cpanm si besoin)"
-for mod in Data::Structure::Util Mojolicious Net::Telnet Time::HiRes; do
+for mod in Digest::SHA1 Data::Structure::Util Mojolicious Net::Telnet Time::HiRes Math::Round; do
   perl -e "use $mod; 1" 2>/dev/null || cpanm --quiet --notest "$mod" >/dev/null 2>&1 || true
 done
 msg_ok "Modules Perl OK"
@@ -101,10 +102,11 @@ read -r MYLAT MYLON <<<"$(perl -e '
 msg_ok "Locator $MYLOC → ($MYLAT, $MYLON)"
 
 echo
-echo -e "${BL}Peers DX-cluster${CL} (le node se connecte à eux pour recevoir le flux global)"
-ask PEER1 "Peer 1 (host:port)" "dxc.f5len.org:8000"
-ask PEER2 "Peer 2 (host:port)" "dxspider.f6bee.org:7300"
-ask PEER3 "Peer 3 (host:port)" "gb7djk.dxcluster.net:7300"
+echo -e "${BL}Peers DX-cluster${CL} (optionnel — laisse vide si pas encore d'autorisation)"
+echo -e "${DM}  Note : pour recevoir le flux global, il faut peerer avec un sysop ami${CL}"
+echo -e "${DM}  (F5LEN, F6BEE, GB7DJK… contacte-les avant). Tu peux ajouter un peer${CL}"
+echo -e "${DM}  plus tard via /spider/connect/<nom> + entrée dans /spider/scripts/startup.${CL}"
+ask PEER1 "Peer 1 (host:port, vide pour skip)" ""
 
 # ── 4. clone DXSpider ────────────────────────────────────────────────
 SPIDER_DIR=/home/sysop/spider
@@ -207,32 +209,52 @@ sed -i \
 chown sysop:sysop "$SPIDER_DIR/local/DXVars.pm"
 msg_ok "DXVars.pm écrit"
 
-# ── 7. fichiers connect/ pour les peers ──────────────────────────────
-mkdir -p "$SPIDER_DIR/connect"
-gen_peer() {
-  local name=$1 hostport=$2
-  local host="${hostport%:*}" port="${hostport#*:}"
-  local fname="$SPIDER_DIR/connect/$name"
-  cat > "$fname" <<EOF
-# auto-generated peer
+# ── 7. fichier connect/ optionnel + startup ──────────────────────────
+mkdir -p "$SPIDER_DIR/connect" "$SPIDER_DIR/scripts"
+if [[ -n "$PEER1" ]]; then
+  host="${PEER1%:*}" port="${PEER1#*:}"
+  cat > "$SPIDER_DIR/connect/peer1" <<EOF
+# Peer 1 — auto-générée par dxspider-proxmox/install.sh
+# Adapte le call et les prompts selon ce que ton peer attend.
 timeout 60
 abort connect failed
 abort already connected
+abort timeout
 connect telnet $host $port
 'login: ' '$NODECALL'
-'>>> ' 'set/dx'
-'>>> ' 'set/skim'
-client $NODECALL telnet
 EOF
-  chown sysop:sysop "$fname"
-}
-gen_peer peer1 "$PEER1"
-gen_peer peer2 "$PEER2"
-gen_peer peer3 "$PEER3"
-msg_ok "3 peers configurés (connect/peer{1,2,3})"
+  chown sysop:sysop "$SPIDER_DIR/connect/peer1"
 
-# Les peers doivent aussi être déclarés dans la table 'cluster' interne.
-# On le fait au démarrage via une commande sysop.
+  # startup script : DXSpider exécute /spider/scripts/startup au boot
+  # avec privilèges sysop complets (les `connect`/`init` sont autorisés ici).
+  printf "connect peer1\n" > "$SPIDER_DIR/scripts/startup"
+  chown sysop:sysop "$SPIDER_DIR/scripts/startup"
+  msg_ok "Peer 1 configuré ($PEER1) + startup script"
+else
+  # On crée un fichier startup vide pour que DXSpider ne se plaigne pas
+  : > "$SPIDER_DIR/scripts/startup"
+  chown sysop:sysop "$SPIDER_DIR/scripts/startup"
+  msg_warn "Aucun peer configuré — node fonctionnel mais sans flux de spots."
+fi
+
+# ── 7b. Listeners.pm — force l'écoute publique sur 0.0.0.0:7300 ──────
+# Sans ce fichier, DXSpider mojo n'écoute que sur 127.0.0.1 par défaut,
+# ce qui rend le node inaccessible depuis le LAN.
+msg_info "Configuration de l'écoute telnet (0.0.0.0:7300)"
+cat > "$SPIDER_DIR/local/Listeners.pm" <<'EOF'
+package main;
+@main::listen = (
+    ["0.0.0.0", 7300],
+);
+1;
+EOF
+chown sysop:sysop "$SPIDER_DIR/local/Listeners.pm"
+msg_ok "Écoute :7300 forcée sur toutes interfaces"
+
+# ── 7c. update_sysop.pl — assure priv=9 sur F4IOZ après DXVars ──────
+msg_info "Mise à jour des privilèges sysop (priv=9)"
+runuser -u sysop -- bash -c "cd $SPIDER_DIR && perl /spider/perl/update_sysop.pl" >/dev/null 2>&1 || true
+msg_ok "Privilèges sysop appliqués"
 
 # ── 8. service systemd ───────────────────────────────────────────────
 msg_info "Service systemd dxspider.service"
@@ -284,16 +306,25 @@ echo -e "  ${BL}Node    :${CL} $NODECALL"
 echo -e "  ${BL}Sysop   :${CL} $MYCALL ($MYNAME)"
 echo -e "  ${BL}IP CT   :${CL} $IP"
 echo -e "  ${BL}Telnet  :${CL} ${GN}telnet $IP 7300${CL}  (login = ton indicatif)"
-echo -e "  ${BL}Peers   :${CL} $PEER1 / $PEER2 / $PEER3"
+if [[ -n "$PEER1" ]]; then
+  echo -e "  ${BL}Peer    :${CL} $PEER1 (essai auto au boot via scripts/startup)"
+else
+  echo -e "  ${BL}Peer    :${CL} ${YW}aucun${CL} — voir 'À FAIRE' plus bas"
+fi
 echo -e "${GN}╠════════════════════════════════════════════════════════════╣${CL}"
 echo -e "  ${BL}Logs    :${CL} journalctl -u dxspider -f"
+echo -e "  ${BL}Debug   :${CL} tail -f /spider/local_data/debug/\$(date +%Y/%j).dat"
 echo -e "  ${BL}Stop    :${CL} systemctl stop dxspider"
 echo -e "  ${BL}Restart :${CL} systemctl restart dxspider"
 echo -e "  ${BL}Config  :${CL} $SPIDER_DIR/local/DXVars.pm"
-echo -e "  ${BL}Peers cfg:${CL} $SPIDER_DIR/connect/peer{1,2,3}"
+echo -e "  ${BL}Listen  :${CL} $SPIDER_DIR/local/Listeners.pm"
+echo -e "  ${BL}Startup :${CL} $SPIDER_DIR/scripts/startup"
 echo -e "${GN}╠════════════════════════════════════════════════════════════╣${CL}"
-echo -e "  ${YW}À FAIRE${CL} : depuis telnet, en sysop, taper :"
-echo -e "    ${DM}set/sys${CL}                  (passer en mode sysop)"
-echo -e "    ${DM}create/node $NODECALL${CL}    (déclarer ton propre node)"
-echo -e "    ${DM}init peer1 peer2 peer3${CL}  (initier la connexion peers)"
+echo -e "  ${YW}À FAIRE${CL} pour recevoir le flux global de spots :"
+echo -e "    1. Contacte un sysop ami (F5LEN, F6BEE, GB7DJK, etc.) pour"
+echo -e "       autoriser ton node ${GN}$NODECALL${CL} comme peer."
+echo -e "    2. Crée /spider/connect/<peerName> avec le script de connexion"
+echo -e "       (login, prompts, etc. fournis par le sysop)."
+echo -e "    3. Ajoute 'connect <peerName>' dans /spider/scripts/startup."
+echo -e "    4. systemctl restart dxspider"
 echo -e "${GN}╚════════════════════════════════════════════════════════════╝${CL}"

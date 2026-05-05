@@ -14,17 +14,30 @@ bash <(curl -fsSL https://raw.githubusercontent.com/f4ioz/dxspider-proxmox/main/
 Le script :
 
 1. Demande l'ID du CT, hostname, storage, RAM/CPU/disk, réseau.
-2. Télécharge le template Debian 12 si absent.
+2. Télécharge le template Debian 13 (sinon 12) si absent.
 3. Crée et démarre le CT (unprivileged, nesting ON).
 4. À l'intérieur du CT, exécute `install.sh` qui :
-   - installe les dépendances Perl
-   - clone DXSpider (branche `mojo`)
-   - demande **callsign, locator, QTH, peers**
+   - active les locales `en_US.UTF-8` / `fr_FR.UTF-8`
+   - installe les dépendances Perl + outils (cpanm, build-essential, openssh-server, telnet…)
+   - installe les modules Perl additionnels via cpanm si manquants en apt (notamment `Digest::SHA1` qui n'a plus de paquet Debian 13)
+   - active SSH (root + password)
+   - clone DXSpider (cascade : github mirror → official → SourceForge tarball)
+   - crée le symlink `/spider` → `/home/sysop/spider`
+   - demande **callsign, locator, QTH, peer (optionnel)**
    - convertit le locator → lat/lon Maidenhead
-   - génère `local/DXVars.pm`
-   - configure 3 peers par défaut (F5LEN, F6BEE, GB7DJK)
+   - génère `local/DXVars.pm` et `local/Listeners.pm` (écoute `0.0.0.0:7300`)
+   - met à jour les privilèges sysop (priv=9) via `update_sysop.pl`
    - installe et démarre le service systemd `dxspider`
-5. Affiche IP + port telnet (`telnet <IP> 7300`).
+5. Affiche IP + port telnet (`telnet <IP> 7300`) + procédure pour ajouter un peer.
+
+> **À propos des peers** : DXSpider mojo bloque les commandes sysop (`init`, `connect`)
+> depuis telnet pour des raisons de sécurité. Le seul moyen de connecter un peer est :
+> - via `/spider/scripts/startup` (exécuté au boot avec privilèges complets), ou
+> - via la console locale (`/spider/perl/console.pl`).
+>
+> De plus, les nodes publics comme GB7DJK refusent les connexions de nodes inconnus —
+> il faut une autorisation préalable du sysop côté distant. Pour démarrer rapidement,
+> demande peering à un sysop ami (F5LEN, F6BEE…).
 
 ## Resources par défaut
 
