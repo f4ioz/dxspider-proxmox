@@ -102,11 +102,13 @@ read -r MYLAT MYLON <<<"$(perl -e '
 msg_ok "Locator $MYLOC → ($MYLAT, $MYLON)"
 
 echo
-echo -e "${BL}Peers DX-cluster${CL} (optionnel — laisse vide si pas encore d'autorisation)"
-echo -e "${DM}  Note : pour recevoir le flux global, il faut peerer avec un sysop ami${CL}"
-echo -e "${DM}  (F5LEN, F6BEE, GB7DJK… contacte-les avant). Tu peux ajouter un peer${CL}"
-echo -e "${DM}  plus tard via /spider/connect/<nom> + entrée dans /spider/scripts/startup.${CL}"
-ask PEER1 "Peer 1 (host:port, vide pour skip)" ""
+echo -e "${BL}Peer DX-cluster${CL} (optionnel — laisse vide si pas encore d'autorisation)"
+echo -e "${DM}  Note : pour recevoir le flux global, le sysop distant doit autoriser${CL}"
+echo -e "${DM}  ton node ($MYCALL-1) sur le sien. Contacte-le avant.${CL}"
+echo -e "${DM}  Exemples : dxcluster.f5len.org:7373 (F5LEN), cluster.dl9gtb.de:7300${CL}"
+echo -e "${DM}  Tu peux aussi en ajouter plus tard via /spider/connect/<nom>${CL}"
+echo -e "${DM}  + ligne 'connect <nom>' dans /spider/scripts/startup.${CL}"
+ask PEER1 "Peer (host:port, vide pour skip)" ""
 
 # ── 4. clone DXSpider ────────────────────────────────────────────────
 SPIDER_DIR=/home/sysop/spider
