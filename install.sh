@@ -90,10 +90,42 @@ ask PEER3 "Peer 3 (host:port)" "gb7djk.dxcluster.net:7300"
 # ── 4. clone DXSpider ────────────────────────────────────────────────
 SPIDER_DIR=/home/sysop/spider
 if [[ ! -d "$SPIDER_DIR" ]]; then
-  msg_info "Clone du dépôt DXSpider"
-  runuser -u sysop -- git clone -b mojo https://www.dxcluster.org/spider.git "$SPIDER_DIR" 2>/dev/null \
-    || runuser -u sysop -- git clone https://github.com/dxspider/dxspider.git "$SPIDER_DIR"
-  msg_ok "Source cloné dans $SPIDER_DIR"
+  msg_info "Clone du dépôt DXSpider (cascade : github mirror → official → sf tarball)"
+  export GIT_TERMINAL_PROMPT=0       # pas de prompt en cas de 401/404
+  cloned=0
+
+  # 1. Mirror GitHub maintenu (latchdevel/DXspider, mojo upstream)
+  if runuser -u sysop -- git clone --depth 1 \
+       https://github.com/latchdevel/DXspider.git "$SPIDER_DIR" >/dev/null 2>&1; then
+    cloned=1
+  fi
+
+  # 2. Officiel (scm.dxcluster.org)
+  if [[ $cloned -eq 0 ]]; then
+    runuser -u sysop -- git clone --depth 1 -b mojo \
+      https://scm.dxcluster.org/scm/spider.git "$SPIDER_DIR" >/dev/null 2>&1 && cloned=1
+  fi
+
+  # 3. Fallback tarball SourceForge
+  if [[ $cloned -eq 0 ]]; then
+    msg_info "git indisponible — fallback tarball SourceForge"
+    TGZ=$(mktemp /tmp/spider.XXXX.tgz)
+    if curl -fsSL --max-time 60 \
+         "https://sourceforge.net/projects/dxspider/files/latest/download" -o "$TGZ" \
+       && [[ -s "$TGZ" ]]; then
+      runuser -u sysop -- mkdir -p "$SPIDER_DIR"
+      tar -xzf "$TGZ" -C "$SPIDER_DIR" --strip-components=1
+      chown -R sysop:sysop "$SPIDER_DIR"
+      cloned=1
+    fi
+    rm -f "$TGZ"
+  fi
+
+  if [[ $cloned -eq 0 ]]; then
+    msg_error "Impossible de récupérer DXSpider (réseau ? sources changées ?)"
+    exit 1
+  fi
+  msg_ok "Source DXSpider installé dans $SPIDER_DIR"
 fi
 
 # ── 5. premier lancement (création schéma SQLite, etc.) ──────────────
