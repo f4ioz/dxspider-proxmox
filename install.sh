@@ -152,29 +152,46 @@ fi
 # ── 6. génération DXVars.pm ──────────────────────────────────────────
 msg_info "Écriture de local/DXVars.pm"
 mkdir -p "$SPIDER_DIR/local"
-cat > "$SPIDER_DIR/local/DXVars.pm" <<EOF
-# DXVars.pm — généré par /proxmox/dxspider/install.sh
+# Heredoc *quoté* ('EOF') = aucune interpolation shell ni Perl ; on
+# substitue ensuite via sed pour insérer les valeurs avec quotes Perl
+# correctes (évite que '@' dans un email soit pris pour un array Perl).
+cat > "$SPIDER_DIR/local/DXVars.pm" <<'EOF'
+# DXVars.pm — généré par dxspider-proxmox/install.sh
 package main;
 use strict;
 use warnings;
 
-\$mycall   = "$NODECALL";
-\$myalias  = "$MYCALL";
-\$myname   = "$MYNAME";
-\$myemail  = "$MYEMAIL";
-\$mylatitude  = $MYLAT;
-\$mylongitude = $MYLON;
-\$myqth    = "$MYQTH";
-\$mylocator = "$MYLOC";
-\$myregion = "France";
-\$mycity   = "$MYQTH";
+our ($mycall, $myalias, $myname, $myemail,
+     $mylatitude, $mylongitude,
+     $myqth, $mylocator, $myregion, $mycity, $lang);
 
-\$lang = "fr";
-
-# crontab par défaut (les peers sont gérés via fichiers connect/)
+$mycall      = '__NODECALL__';
+$myalias     = '__MYCALL__';
+$myname      = '__MYNAME__';
+$myemail     = '__MYEMAIL__';
+$mylatitude  = __MYLAT__;
+$mylongitude = __MYLON__;
+$myqth       = '__MYQTH__';
+$mylocator   = '__MYLOC__';
+$myregion    = 'France';
+$mycity      = '__MYQTH__';
+$lang        = 'fr';
 
 1;
 EOF
+# Substitution sécurisée : on échappe les apostrophes éventuelles dans
+# les valeurs utilisateur pour ne pas casser les chaînes Perl single-quote.
+esc() { printf '%s' "$1" | sed "s/'/\\\\'/g"; }
+sed -i \
+  -e "s|__NODECALL__|$(esc "$NODECALL")|" \
+  -e "s|__MYCALL__|$(esc "$MYCALL")|" \
+  -e "s|__MYNAME__|$(esc "$MYNAME")|" \
+  -e "s|__MYEMAIL__|$(esc "$MYEMAIL")|" \
+  -e "s|__MYLAT__|$MYLAT|" \
+  -e "s|__MYLON__|$MYLON|" \
+  -e "s|__MYQTH__|$(esc "$MYQTH")|g" \
+  -e "s|__MYLOC__|$(esc "$MYLOC")|" \
+  "$SPIDER_DIR/local/DXVars.pm"
 chown sysop:sysop "$SPIDER_DIR/local/DXVars.pm"
 msg_ok "DXVars.pm écrit"
 
