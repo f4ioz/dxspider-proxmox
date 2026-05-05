@@ -94,16 +94,47 @@ echo
 ask_yn CONFIRM "Confirmer la création ?" "y"
 [[ $CONFIRM -eq 1 ]] || { msg_warn "Abandon utilisateur"; exit 0; }
 
-# ── template Debian 12 ────────────────────────────────────────────────
-msg_info "Recherche du template Debian 12"
-TPL=$(pveam list "$DEFAULT_STORAGE" 2>/dev/null | awk '/debian-12-standard.*\.tar\.zst/{print $1}' | tail -1 || true)
-if [[ -z "$TPL" ]]; then
-  msg_info "Téléchargement du template (peut prendre 1-2 min)"
-  TPL_NAME=$(pveam available -section system 2>/dev/null | awk '/debian-12-standard/{print $2}' | tail -1)
-  [[ -z "$TPL_NAME" ]] && { msg_error "template introuvable"; exit 1; }
-  pveam download "$DEFAULT_STORAGE" "$TPL_NAME" >/dev/null
-  TPL="$DEFAULT_STORAGE:vztmpl/$TPL_NAME"
+# ── template Debian (13 puis 12) ──────────────────────────────────────
+# Les templates LXC vont dans un storage de content=vztmpl (ex: 'local').
+# 'local-lvm' ne supporte QUE 'images'. On détecte automatiquement un
+# storage compatible et on s'en sert pour le template uniquement ; le
+# rootfs continue d'aller sur le storage choisi par l'utilisateur.
+set +e +o pipefail
+TPL_STORAGE=$(pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 && $1!=""{print $1; exit}')
+set -e -o pipefail
+if [[ -z "$TPL_STORAGE" ]]; then
+  msg_error "Aucun storage avec content=vztmpl trouvé."
+  echo "         → Datacenter > Storage > local > Edit > Content : cocher 'VZDump backup file'"
+  echo "           et 'Container template'."
+  exit 1
 fi
+msg_ok "Storage templates : $TPL_STORAGE"
+
+msg_info "Recherche du template Debian (13 sinon 12)"
+set +e +o pipefail
+# Cherche en local d'abord (déjà téléchargé) ; tri version pour préférer 13
+TPL_FILE=$(pveam list "$TPL_STORAGE" 2>/dev/null \
+           | awk '/debian-(13|12)-standard.*\.tar\.zst/{print $1}' \
+           | sort -V | tail -1)
+set -e -o pipefail
+
+if [[ -z "$TPL_FILE" ]]; then
+  msg_info "Mise à jour du catalogue pveam"
+  pveam update >/dev/null 2>&1 || true
+  set +e +o pipefail
+  TPL_NAME=$(pveam available -section system 2>/dev/null \
+             | awk '/debian-(13|12)-standard.*\.tar\.zst/{print $2}' \
+             | sort -V | tail -1)
+  set -e -o pipefail
+  if [[ -z "$TPL_NAME" ]]; then
+    msg_error "Aucun template Debian 12/13 disponible — vérifier le réseau et 'pveam update'"
+    exit 1
+  fi
+  msg_info "Téléchargement de $TPL_NAME (peut prendre 1-2 min)"
+  pveam download "$TPL_STORAGE" "$TPL_NAME" >/dev/null
+  TPL_FILE="$TPL_STORAGE:vztmpl/$TPL_NAME"
+fi
+TPL="$TPL_FILE"
 msg_ok "Template : $TPL"
 
 # ── création CT ────────────────────────────────────────────────────────
