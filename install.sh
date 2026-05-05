@@ -38,15 +38,22 @@ update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 >/dev/null 2>&1
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 msg_ok "Locales générées"
 
-msg_info "Installation des dépendances Perl"
+msg_info "Installation des dépendances Perl + outils"
 apt-get -qq install -y --no-install-recommends \
-  perl ca-certificates curl git \
+  perl ca-certificates curl git openssh-server iproute2 telnet vim less \
   libtimedate-perl libnet-telnet-perl libdigest-sha-perl \
   libdbi-perl libdbd-sqlite3-perl libdata-dumper-simple-perl \
   libio-socket-ssl-perl libnet-cidr-lite-perl libnet-cidr-perl \
   libtime-hires-perl libio-socket-inet6-perl libxml-simple-perl \
   libfile-find-rule-perl >/dev/null
 msg_ok "Dépendances installées"
+
+msg_info "Activation SSH (root login par mot de passe)"
+sed -i -E 's/^#?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -i -E 's/^#?\s*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+systemctl enable ssh >/dev/null 2>&1
+systemctl restart ssh
+msg_ok "SSH actif sur :22 (root + password)"
 
 # ── 2. user sysop ─────────────────────────────────────────────────────
 if ! id sysop >/dev/null 2>&1; then
