@@ -24,10 +24,21 @@ ask() {
 
 [[ "$(id -u)" -eq 0 ]] || { msg_error "Doit tourner en root"; exit 1; }
 
-# ── 1. dépendances ────────────────────────────────────────────────────
-msg_info "Installation des dépendances Perl"
+# ── 1. locales + dépendances ──────────────────────────────────────────
 export DEBIAN_FRONTEND=noninteractive
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
+msg_info "Génération des locales (en_US.UTF-8, fr_FR.UTF-8)"
 apt-get -qq update >/dev/null
+apt-get -qq install -y --no-install-recommends locales >/dev/null
+sed -i -E 's/^# ?(en_US\.UTF-8|fr_FR\.UTF-8)/\1/' /etc/locale.gen
+locale-gen >/dev/null 2>&1
+update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 >/dev/null 2>&1
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+msg_ok "Locales générées"
+
+msg_info "Installation des dépendances Perl"
 apt-get -qq install -y --no-install-recommends \
   perl ca-certificates curl git \
   libtimedate-perl libnet-telnet-perl libdigest-sha-perl \
@@ -161,6 +172,8 @@ Type=simple
 User=sysop
 Group=sysop
 WorkingDirectory=/home/sysop/spider/perl
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
 ExecStart=/usr/bin/perl /home/sysop/spider/perl/cluster.pl
 Restart=on-failure
 RestartSec=10
