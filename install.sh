@@ -91,15 +91,15 @@ ask PEER3 "Peer 3 (host:port)" "gb7djk.dxcluster.net:7300"
 SPIDER_DIR=/home/sysop/spider
 if [[ ! -d "$SPIDER_DIR" ]]; then
   msg_info "Clone du dépôt DXSpider"
-  sudo -u sysop git clone -b mojo https://www.dxcluster.org/spider.git "$SPIDER_DIR" 2>/dev/null \
-    || sudo -u sysop git clone https://github.com/dxspider/dxspider.git "$SPIDER_DIR"
+  runuser -u sysop -- git clone -b mojo https://www.dxcluster.org/spider.git "$SPIDER_DIR" 2>/dev/null \
+    || runuser -u sysop -- git clone https://github.com/dxspider/dxspider.git "$SPIDER_DIR"
   msg_ok "Source cloné dans $SPIDER_DIR"
 fi
 
 # ── 5. premier lancement (création schéma SQLite, etc.) ──────────────
 if [[ ! -f "$SPIDER_DIR/local/DXVars.pm" ]]; then
   msg_info "Bootstrap du schéma DXSpider (premier run)"
-  sudo -u sysop bash -c "cd $SPIDER_DIR && yes | perl create_sysop.pl" >/dev/null 2>&1 || true
+  runuser -u sysop -- bash -c "cd $SPIDER_DIR && yes | perl create_sysop.pl" >/dev/null 2>&1 || true
   msg_ok "Schéma initialisé"
 fi
 
