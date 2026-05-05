@@ -47,8 +47,18 @@ apt-get -qq install -y --no-install-recommends \
   libtime-hires-perl libio-socket-inet6-perl libxml-simple-perl \
   libfile-find-rule-perl libmojolicious-perl libcrypt-passwdmd5-perl \
   libio-string-perl libjson-xs-perl libtest-pod-perl libterm-readkey-perl \
-  libcurses-perl libev-perl >/dev/null
+  libcurses-perl libev-perl libdata-structure-util-perl libnet-dns-perl \
+  libgeo-coordinates-utm-perl libio-socket-timeout-perl libdigest-md5-perl \
+  cpanminus build-essential >/dev/null
 msg_ok "Dépendances installées"
+
+# Quelques modules CPAN n'ont pas de paquet Debian — on les installe via cpanm
+# si manquants après apt. La liste est minimale.
+msg_info "Vérification des modules Perl complémentaires (cpanm si besoin)"
+for mod in Data::Structure::Util Mojolicious Net::Telnet Time::HiRes; do
+  perl -e "use $mod; 1" 2>/dev/null || cpanm --quiet --notest "$mod" >/dev/null 2>&1 || true
+done
+msg_ok "Modules Perl OK"
 
 msg_info "Activation SSH (root login par mot de passe)"
 sed -i -E 's/^#?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
